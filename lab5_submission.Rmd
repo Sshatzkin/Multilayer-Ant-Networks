@@ -71,3 +71,16 @@ head(NEE2017$layers)
 #print(NEE2017)
 
 ```
+# Intralayer Edges
+```{r}
+layer1 <- read_csv('Pilosof_etal_NEE2017_1.csv')
+# Note that the host names are in the first column of that data frame but do not need to be in the matrix cells
+
+print(head(layer1))
+
+#Convert to a matrix (exclude first column)
+layer1_mat <- as.matrix(layer1[,2:ncol(layer1)])
+layer1_mat[1:3, 1:3]
+
+nodes <- read_csv('NEE2017_nodes.csv')
+```
