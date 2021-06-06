@@ -1,0 +1,73 @@
+---
+title: "Ants_Infomap"
+output: html_document
+---
+
+```{r setup}
+# Install (if not installed) and load necessary packages
+package.list=c("attempt", "cowplot", "igraph", "ggalluvial", "magrittr", "metafolio", "tidyverse", "vegan", "devtools")
+
+loaded <- package.list %in% .packages()
+package.list <- package.list[!loaded]
+installed <- package.list %in% .packages(TRUE)
+if(!all(installed)) install.packages(package.list[!installed], repose="http://cran.rstudio.com/")
+
+#Install Infomapecology
+devtools::install_github('Ecological-Complexity-Lab/infomap_ecology_package', force=T)
+library(infomapecology)
+
+# Check the version. Should be at least 0.1.1.1
+packageDescription('infomapecology')
+
+# Install infomap if you have not done so externally (see previous section in this readme)
+setwd('/home/sshatzkin/Networks in Biology')
+install_infomap()
+
+# Check Infomap is running
+setwd('/home/sshatzkin/Networks in Biology')
+check_infomap() #Make sure file can be run correctly. Should return True
+```
+
+```{r}
+library(igraph)
+library(bipartite)
+library(tidyverse)
+library(magrittr)
+library(infomapecology)
+library(readxl)
+library(ggalluvial)
+```
+# 1. Data Structures: Monolayer Networks - Quick Review
+```{r}
+# Bipartite Network Matrix Input
+data("memmott1999")
+network_object <- create_monolayer_object(x= memmott1999, directed = F, bipartite = T)
+names(network_object)
+network_object$edge_list # an edge list data structure
+
+# Now take an edge list and convert to a matrix
+edgelist_input <- network_object $edge_list
+network_object <- create_monolayer_object(x=edgelist_input, directed = F, bipartite = T)
+names(network_object)
+network_object$mat # A matrix data structure
+
+```
+# 2. Data Structures: Multilayer Networks
+```{r}
+data("siberia1982_7_links")
+data("siberia1982_7_nodes")
+
+layer_map <- tibble(layer_id=1:6, layer_name=1982:1987)
+NEE2017 <- create_multilayer_object(extended = siberia1982_7_links, nodes = siberia1982_7_nodes, intra_output_extended = T, inter_output_extended = T, layers = layer_map)
+head(NEE2017$intra)
+head(NEE2017$inter)
+head(NEE2017$nodes)
+head(NEE2017$layers)
+```
+
+```{r}
+#print(siberia1982_7_links)
+#print(siberia1982_7_nodes)
+#print(NEE2017)
+
+```
