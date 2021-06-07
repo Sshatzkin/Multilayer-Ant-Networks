@@ -37,32 +37,44 @@ library(infomapecology)
 library(readxl)
 library(ggalluvial)
 ```
-# 1. Data Structures: Monolayer Networks - Quick Review
-```{r}
-# Bipartite Network Matrix Input
-data("memmott1999")
-network_object <- create_monolayer_object(x= memmott1999, directed = F, bipartite = T)
-names(network_object)
-network_object$edge_list # an edge list data structure
 
-# Now take an edge list and convert to a matrix
-edgelist_input <- network_object $edge_list
-network_object <- create_monolayer_object(x=edgelist_input, directed = F, bipartite = T)
-names(network_object)
-network_object$mat # A matrix data structure
+# 1. Infomap Analysis
+### Setup
+```{r}
+numFiles <- 41
+
+# Create the file names
+file_names <- sprintf('./ants_proximity_weighted/ant_mersch_col1_day%02d_attribute.graphml', 1:numFiles);
+
+# Create an empty linked list
+colony1_data <- vector(mode = "list", length = numFiles)
+
+# Read in all of the files
+for (i in 1:numFiles){
+  colony1_data[[i]] <- read_graph(file_names[i], format = "graphml")
+}
+
+for (i in 1:3){
+  plot.igraph(colony1_data[[i]]) # This plot is not particularly attractive
+}
+```
+```{r}
+# Now we need to convert this igraph data into data structures that infomap can take
 
 ```
-# 2. Data Structures: Multilayer Networks
-```{r}
-data("siberia1982_7_links")
-data("siberia1982_7_nodes")
 
-layer_map <- tibble(layer_id=1:6, layer_name=1982:1987)
-NEE2017 <- create_multilayer_object(extended = siberia1982_7_links, nodes = siberia1982_7_nodes, intra_output_extended = T, inter_output_extended = T, layers = layer_map)
-head(NEE2017$intra)
-head(NEE2017$inter)
-head(NEE2017$nodes)
-head(NEE2017$layers)
+```{r}
+#data("./ants_proximity_weighted/ant_mersch_col1_day01_attribute.graphml")
+#data("siberia1982_7_nodes")
+
+layer_map <- tibble(layer_id=1:10, layer_name=1:10)
+#colony_1 <- create_multilayer_object(extended = siberia1982_7_links, nodes = siberia1982_7_nodes, intra_output_extended = T, inter_output_extended = T, layers = layer_map)
+
+
+#head(NEE2017$intra)
+#head(NEE2017$inter)
+#head(NEE2017$nodes)
+#head(NEE2017$layers)
 ```
 
 ```{r}
@@ -71,3 +83,5 @@ head(NEE2017$layers)
 #print(NEE2017)
 
 ```
+
+# 2. Muxvis Analysis
