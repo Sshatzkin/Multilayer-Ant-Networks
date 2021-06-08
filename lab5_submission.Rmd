@@ -66,7 +66,7 @@ head(NEE2017$layers)
 ```
 
 ```{r}
-#print(siberia1982_7_links)
+print(siberia1982_7_links)
 #print(siberia1982_7_nodes)
 #print(NEE2017)
 

@@ -39,7 +39,7 @@ library(ggalluvial)
 ```
 
 # 1. Infomap Analysis
-### Setup
+### Importing the Data
 ```{r}
 numFiles <- 41
 
@@ -54,33 +54,180 @@ for (i in 1:numFiles){
   colony1_data[[i]] <- read_graph(file_names[i], format = "graphml")
 }
 
-for (i in 1:3){
+for (i in 1:2){
   plot.igraph(colony1_data[[i]]) # This plot is not particularly attractive
 }
+
 ```
+
+### Perparing the data.
+The data must be converted to an infomap compatible format
+
+#### Helper functions
+```{r}
+# Function that takes a vertex list and the number of layers in the multilayer network, and produces a formatted df containing the multilayer edges in that network (with edges of weight 1)
+interlayer_edge_list <- function (vertex_names, num_layers){
+  
+  numVerts <- length (vertex_names)
+  numRows <- numVerts * (num_layers - 1)
+  
+  col_layer_from <- vector(length = numRows)
+  col_layer_to <- vector(length = numRows)
+  col_node_from <- vector(length = numRows)
+  col_node_to <- vector(length = numRows)
+  col_weights <- vector(length = numRows)
+  
+  for (l in 1:(num_layers-1)){
+    for (vertex in 1:numVerts){
+      currIndex <- ((l-1) * numVerts) + vertex 
+      col_layer_from[currIndex] <- l
+      col_layer_to[currIndex] <- l + 1
+      col_node_from[currIndex] <- vertex_names[vertex]
+      col_node_to[currIndex] <- vertex_names[vertex]
+      col_weights[currIndex] <- 1
+    }
+  }
+  
+  df <- data.frame("layer_from" = col_layer_from, "node_from" = col_node_from, "layer_to" = col_layer_to, "node_to" = col_node_to, "weight" = col_weights)
+  
+  return (df)
+}
+
+# Joins a list of dataframes into a single dataframe 
+join_edge_dfs <- function(edge_dfs, num_lists){
+  df <- edge_dfs[[1]]
+  for (i in 2:num_lists){
+    df <- rbind(df, edge_dfs[[i]])
+  }
+  return(df)
+}
+
+
+```
+
+#### Main datatype conversion function
 ```{r}
 # Now we need to convert this igraph data into data structures that infomap can take
 
+igraphs_to_multilayer_df <- function (igraph_list, num_elements){
+  
+  # Create empty lists
+  colony_edges <- vector(mode = "list", length = num_elements)
+  colony_nodes <- vector(mode = "list", length = num_elements)
+
+  # Loop over layers
+  for (i in 1:num_elements){
+    
+    # Pull out the edge lists from each layer
+    colony_edges[[i]] <- data.frame(cbind(get.edgelist(igraph_list[[i]]), round (E(igraph_list[[i]])$weight, 3)))
+    
+    #Assign column labels
+    names(colony_edges[[i]]) <- c('node_from', 'node_to', 'weight')
+    
+
+    #Generate an array of layer labels
+    layer_arr <- rep(i, nrow(colony_edges[[i]]))
+    
+    colony_edges[[i]]$layer_from <- layer_arr
+    colony_edges[[i]]$layer_to <- layer_arr
+    
+    # Reorder the columns
+    colony_edges[[i]] <- colony_edges[[i]][,c('layer_from', 'node_from', 'layer_to', 'node_to', 'weight')]
+    
+    
+    
+    # Pull out the vertices from each layer
+    dayi_vertices <- V(igraph_list[[i]])
+    
+    # Prepare the node lists
+    colony_nodes[[i]] <- data.frame(as_ids(dayi_vertices))
+    names(colony_nodes[[i]]) <- c('node_id')
+    
+  }
+  
+  
+  # Construct inter-layer edges
+  interlayer_edges <- interlayer_edge_list(colony_nodes[[i]]$node_id, num_elements);
+  
+
+  # Now merge these smaller lists to form the full edge and node lists
+  colony_edges_joined <- join_edge_dfs(colony_edges, num_elements)
+  colony_edges_joined <- rbind(colony_edges_joined, interlayer_edges)
+  
+  
+  return (list(colony_edges_joined, colony_nodes[[1]]))
+  
+}
+
+
+```
+
+
+
+```{r}
+
+colony1_outs <- igraphs_to_multilayer_df(colony1_data, numFiles)
+
+colony1_edges <- colony1_outs[[1]]
+colony1_nodes <- colony1_outs[[2]]
+
+head(colony1_edges)
+dim(colony1_edges)
+head(colony1_nodes)
+dim(colony1_nodes)
+
 ```
 
 ```{r}
-#data("./ants_proximity_weighted/ant_mersch_col1_day01_attribute.graphml")
+#data("siberia1982_7_nodes")
 #data("siberia1982_7_nodes")
 
 layer_map <- tibble(layer_id=1:10, layer_name=1:10)
-#colony_1 <- create_multilayer_object(extended = siberia1982_7_links, nodes = siberia1982_7_nodes, intra_output_extended = T, inter_output_extended = T, layers = layer_map)
 
+colony_1 <- create_multilayer_object(extended = colony1_edges, nodes = colony1_nodes, intra_output_extended = T, inter_output_extended = T, layers = layer_map)
 
-#head(NEE2017$intra)
-#head(NEE2017$inter)
-#head(NEE2017$nodes)
-#head(NEE2017$layers)
+colony1_modules <- run_infomap_multilayer(M=colony_1, relax = F, flow_model = 'directed', silent = T, trials = 100, seed = 497294, temporal_network = T)
+
+head(colony_1$intra)
+head(colony_1$inter)
+head(colony_1$nodes)
+head(colony_1$layers)
 ```
 
 ```{r}
-#print(siberia1982_7_links)
-#print(siberia1982_7_nodes)
-#print(NEE2017)
+colony1_modules
+```
+
+```{r}
+# Module Persistance
+module_persistence <- colony1_modules$modules %>%
+  group_by(module) %>%
+  summarise(b=min(layer_id), d=max(layer_id), persistence=d-b+1)
+
+# Plot modules' persistence
+plot_multilayer_modules(colony1_modules, type = 'rectangle', color_modules = T)+
+  scale_x_continuous(breaks = seq(0, 41, 1))+
+  scale_y_continuous(breaks = seq(0, 10, 1))+
+  scale_fill_viridis_c()+
+  theme_bw()+
+  theme(panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        axis.title = element_text(size = 20),
+        legend.text = element_text(size=15),
+        legend.title = element_text(size=20))
+
+```
+```{r}
+# Plot species flow through modules in time
+plot_multilayer_alluvial(colony1_modules, module_labels = F)+
+  scale_x_continuous(breaks=seq(0, 6, 1))+
+  scale_y_continuous(breaks=seq(0,200,20))+
+  labs(y='Number of Ants')+
+  theme_bw()+
+  theme(legend.position = "none",
+        panel.grid = element_blank(),
+        axis.text = element_text(color='black', size = 20),
+        axis.title = element_text(size=20))
 
 ```
 
