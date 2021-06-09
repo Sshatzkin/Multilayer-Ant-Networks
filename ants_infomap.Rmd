@@ -43,19 +43,26 @@ library(ggalluvial)
 ```{r}
 numFiles <- 41
 
-# Create the file names
-file_names <- sprintf('./ants_proximity_weighted/ant_mersch_col1_day%02d_attribute.graphml', 1:numFiles);
-
-# Create an empty linked list
-colony1_data <- vector(mode = "list", length = numFiles)
-
-# Read in all of the files
-for (i in 1:numFiles){
-  colony1_data[[i]] <- read_graph(file_names[i], format = "graphml")
+import_data <- function (string_format, numFiles){
+  # Create the file names
+  file_names <- sprintf(string_format, 1:numFiles);
+  
+  # Create an empty linked list
+  colony_data <- vector(mode = "list", length = numFiles)
+  
+  # Read in all of the files
+  for (i in 1:numFiles){
+    colony_data[[i]] <- read_graph(file_names[i], format = "graphml")
+  }
+  
+  return (colony_data)
 }
 
+colony1_data <- import_data('./ants_proximity_weighted/ant_mersch_col1_day%02d_attribute.graphml', numFiles)
+
+
 for (i in 1:2){
-  plot.igraph(colony1_data[[i]]) # This plot is not particularly attractive
+  plot.igraph(colony1_data[[i]]) # This plot is not particularly informative
 }
 
 ```
@@ -163,72 +170,191 @@ igraphs_to_multilayer_df <- function (igraph_list, num_elements){
 ```
 
 
-
+### Plot all 41 days as one multilayer network
 ```{r}
 
-colony1_outs <- igraphs_to_multilayer_df(colony1_data, numFiles)
+# Function takes the igraph_list, converts to an infomap data structure, and returns the module results
+igraph_to_infomap_modules <- function (igraph_list, num_layers){
+  
+  # Convert the igraph list into a dataframe with interlayer edges
+  colony_dfs <- igraphs_to_multilayer_df(igraph_list, num_layers)
 
-colony1_edges <- colony1_outs[[1]]
-colony1_nodes <- colony1_outs[[2]]
+  colony_edges <- colony_dfs[[1]]
+  colony_nodes <- colony_dfs[[2]]
 
-head(colony1_edges)
-dim(colony1_edges)
-head(colony1_nodes)
-dim(colony1_nodes)
+  # Build layer_map
+  layer_map <- tibble(layer_id=1:num_layers, layer_name=1:num_layers)
+
+  # Create the multilary object
+  colony <- create_multilayer_object(extended = colony_edges, nodes = colony_nodes, intra_output_extended = T, inter_output_extended = T, layers = layer_map)
+
+  # Run infomap
+  colony_modules <- run_infomap_multilayer(M=colony, relax = F, flow_model = 'directed', silent = T, trials = 100, seed = 497294, temporal_network = T)
+  
+  return (colony_modules)  
+}
 
 ```
 
-```{r}
-#data("siberia1982_7_nodes")
-#data("siberia1982_7_nodes")
-
-layer_map <- tibble(layer_id=1:10, layer_name=1:10)
-
-colony_1 <- create_multilayer_object(extended = colony1_edges, nodes = colony1_nodes, intra_output_extended = T, inter_output_extended = T, layers = layer_map)
-
-colony1_modules <- run_infomap_multilayer(M=colony_1, relax = F, flow_model = 'directed', silent = T, trials = 100, seed = 497294, temporal_network = T)
-
-head(colony_1$intra)
-head(colony_1$inter)
-head(colony_1$nodes)
-head(colony_1$layers)
-```
 
 ```{r}
+colony1_modules <- igraph_to_infomap_modules(colony1_data, numFiles)
 colony1_modules
 ```
 
 ```{r}
-# Module Persistance
-module_persistence <- colony1_modules$modules %>%
+plot_persistance <- function (module_data, num_layers, num_modules){
+  # Module Persistance
+  module_persistence <- module_data$modules %>%
   group_by(module) %>%
   summarise(b=min(layer_id), d=max(layer_id), persistence=d-b+1)
 
-# Plot modules' persistence
-plot_multilayer_modules(colony1_modules, type = 'rectangle', color_modules = T)+
-  scale_x_continuous(breaks = seq(0, 41, 1))+
-  scale_y_continuous(breaks = seq(0, 10, 1))+
-  scale_fill_viridis_c()+
-  theme_bw()+
-  theme(panel.grid.major = element_blank(),
-        panel.grid.minor = element_blank(),
-        axis.title = element_text(size = 20),
-        legend.text = element_text(size=15),
-        legend.title = element_text(size=20))
+  # Plot modules' persistence
+  plot_multilayer_modules(module_data, type = 'rectangle', color_modules = T)+
+    scale_x_continuous(breaks = seq(0, num_layers, 5))+
+    scale_y_continuous(breaks = seq(0, num_modules, 2))+
+    scale_fill_viridis_c()+
+    theme_bw()+
+    theme(panel.grid.major = element_blank(),
+          panel.grid.minor = element_blank(),
+          axis.title = element_text(size = 20),
+          legend.text = element_text(size=15),
+          legend.title = element_text(size=20))
+}
+
+plot_persistance(colony1_modules, 41, 20)
+
 
 ```
 ```{r}
-# Plot species flow through modules in time
-plot_multilayer_alluvial(colony1_modules, module_labels = F)+
-  scale_x_continuous(breaks=seq(0, 6, 1))+
-  scale_y_continuous(breaks=seq(0,200,20))+
+plot_alluvial <- function (module_data, num_layers, num_ants){
+  # Plot species flow through modules in time
+  plot_multilayer_alluvial(module_data, module_labels = F)+
+  scale_x_continuous(breaks=seq(0, num_layers, 5))+
+  scale_y_continuous(breaks=seq(0,num_ants,20))+
   labs(y='Number of Ants')+
   theme_bw()+
   theme(legend.position = "none",
         panel.grid = element_blank(),
         axis.text = element_text(color='black', size = 20),
         axis.title = element_text(size=20))
+}
+
+plot_alluvial(colony1_modules, 41, 120)
+
+```
+#### Test with another colony
+```{r}
+
+# Import all of the colony2 data files
+colony2_data <- import_data('./ants_proximity_weighted/ant_mersch_col2_day%02d_attribute.graphml', numFiles)
+
+# Convert a list of igraphs into a processed infomap module
+colony2_modules <- igraph_to_infomap_modules(colony2_data, numFiles)
+
+# Plots functions based on just module data
+plot_persistance(colony2_modules, 41, 20)
+plot_alluvial(colony2_modules, 41, 120)
+
 
 ```
 
-# 2. Muxvis Analysis
+### Plot in 10-day increments
+```{r}
+
+divi_modules <- igraph_to_infomap_modules(colony1_data[1:11], 11)
+plot_persistance(divi_modules, 11, 20)
+plot_alluvial(divi_modules, 11, 120)
+
+divi_modules <- igraph_to_infomap_modules(colony1_data[12:21], 10)
+plot_persistance(divi_modules, 10, 20)
+plot_alluvial(divi_modules, 10, 120)
+
+```
+```{r}
+divi_modules <- igraph_to_infomap_modules(colony1_data[22:31], 10)
+plot_persistance(divi_modules, 10, 20)
+plot_alluvial(divi_modules, 10, 120)
+
+divi_modules <- igraph_to_infomap_modules(colony1_data[32:41], 10)
+plot_persistance(divi_modules, 10, 20)
+plot_alluvial(divi_modules, 10, 120)
+
+
+```
+```{r}
+divi_modules <- igraph_to_infomap_modules(colony1_data[1:6], 6)
+plot_persistance(divi_modules, 6, 20)
+plot_alluvial(divi_modules, 6, 120)
+
+divi_modules <- igraph_to_infomap_modules(colony1_data[7:11], 5)
+plot_persistance(divi_modules, 5, 20)
+plot_alluvial(divi_modules, 5, 120)
+
+divi_modules <- igraph_to_infomap_modules(colony1_data[12:16], 5)
+plot_persistance(divi_modules, 5, 20)
+plot_alluvial(divi_modules, 5, 120)
+
+divi_modules <- igraph_to_infomap_modules(colony1_data[17:21], 5)
+plot_persistance(divi_modules, 5, 20)
+plot_alluvial(divi_modules, 5, 120)
+
+
+divi_modules <- igraph_to_infomap_modules(colony1_data[32:36], 5)
+plot_persistance(divi_modules, 5, 20)
+plot_alluvial(divi_modules, 5, 120)
+
+divi_modules <- igraph_to_infomap_modules(colony1_data[37:41], 5)
+plot_persistance(divi_modules, 5, 20)
+plot_alluvial(divi_modules, 5, 120)
+```
+
+#### Double Layer Networks
+```{r}
+divi_modules <- igraph_to_infomap_modules(colony1_data[1:2], 2)
+plot_persistance(divi_modules, 2, 20)
+plot_alluvial(divi_modules, 2, 120)
+
+divi_modules <- igraph_to_infomap_modules(colony1_data[2:3], 2)
+plot_persistance(divi_modules, 2, 20)
+plot_alluvial(divi_modules, 2, 120)
+
+divi_modules <- igraph_to_infomap_modules(colony1_data[3:4], 2)
+plot_persistance(divi_modules, 2, 20)
+plot_alluvial(divi_modules, 2, 120)
+
+divi_modules <- igraph_to_infomap_modules(colony1_data[4:5], 2)
+plot_persistance(divi_modules, 2, 20)
+plot_alluvial(divi_modules, 2, 120)
+
+divi_modules <- igraph_to_infomap_modules(colony1_data[5:6], 2)
+plot_persistance(divi_modules, 2, 20)
+plot_alluvial(divi_modules, 2, 120)
+```
+
+### Monolayer Approach
+Note that this code is a template of the monlayer adaptation of this method, but is not complete.
+```{r}
+igraphs_to_monolayer_dfs <- function (igraph_list, num_elements){
+  
+  # Create empty lists
+  #colony_layers <- vector(mode = "list", length = num_elements)
+
+  # Loop over layers
+  #for (i in 1:num_elements){
+  #  adj_mtrx <- as_adjacency_matrix(igraph_list[[i]])
+   
+    # Pull out the edge lists from each layer
+    #colony_layers[[i]] <- create_monolayer_object(x = adj_mtrx, directed = F, bipartite = F)
+    
+    #Assign column labels
+    #names(colony_edges[[i]]) <- c('node_from', 'node_to', 'weight')
+    
+    
+  #}
+  
+  #return (colony_layers)
+}
+
+#colony1_monolayers <- igraphs_to_monolayer_dfs(colony1_data, 41)
+```
